@@ -18,12 +18,7 @@ package org.apache.calcite.sql.type;
 
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeComparability;
-import org.apache.calcite.sql.SqlCallBinding;
-import org.apache.calcite.sql.SqlLiteral;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlOperandCountRange;
-import org.apache.calcite.sql.SqlOperator;
-import org.apache.calcite.sql.SqlUtil;
+import org.apache.calcite.sql.*;
 
 import com.google.common.collect.ImmutableList;
 

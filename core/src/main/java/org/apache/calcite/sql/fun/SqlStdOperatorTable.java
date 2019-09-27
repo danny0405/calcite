@@ -22,6 +22,7 @@ import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlBinaryOperator;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlDescriptorOperator;
 import org.apache.calcite.sql.SqlFilterOperator;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
@@ -46,6 +47,7 @@ import org.apache.calcite.sql.SqlSampleSpec;
 import org.apache.calcite.sql.SqlSetOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.SqlSyntax;
+import org.apache.calcite.sql.SqlTableValuedFunctionWindowingOperator;
 import org.apache.calcite.sql.SqlUnnestOperator;
 import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.SqlValuesOperator;
@@ -2251,6 +2253,19 @@ public class SqlStdOperatorTable extends ReflectiveSqlOperatorTable {
           call.operand(1).unparse(writer, 0, rightPrec);
         }
       };
+
+  /** DESCRIPTOR(column_name, ...). */
+  public static final SqlOperator DESCRIPTOR = new SqlDescriptorOperator();
+
+  /** TUMBLE as a table-value function. */
+  public static final SqlFunction TUMBLE_TABLE_FUNCTION =
+      new SqlTableValuedFunctionWindowingOperator(
+          SqlKind.TUMBLE.name(),
+          SqlKind.TUMBLE,
+          SqlTableValuedFunctionWindowingOperator.ARG0_TABLE_FUNCTION_WINDOWING, null,
+          SqlTableValuedFunctionWindowingOperator.TABLE_VALUED_FUNCTION_TUMBLE_CHECKER,
+          SqlFunctionCategory.SYSTEM
+      );
 
   /** The {@code TUMBLE} group function.
    *

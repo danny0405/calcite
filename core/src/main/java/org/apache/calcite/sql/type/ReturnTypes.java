@@ -90,6 +90,7 @@ public abstract class ReturnTypes {
    */
   public static final SqlReturnTypeInference ARG0 =
       new OrdinalReturnTypeInference(0);
+
   /**
    * Type-inference strategy whereby the result type of a call is VARYING the
    * type of the first argument. The length returned is the same as length of

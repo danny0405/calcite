@@ -10088,6 +10088,13 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .fails("Column 'F0\\.C1\\.NOTFOUND' not found in table '" + table + "'");
   }
 
+  @Test public void testDescriptor() {
+    sql("select * from table(tumble(table orders, descriptor(rowtime), interval '2' hour))").ok();
+    expr("select * from table(tumble(table orders, descriptor(^column_not_exist^), "
+        + "interval '2' hour))")
+        .fails("Unknown identifier 'COLUMN_NOT_EXIST'");
+  }
+
   @Test public void testStreamTumble() {
     // TUMBLE
     sql("select stream tumble_end(rowtime, interval '2' hour) as rowtime\n"
@@ -10096,7 +10103,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql("select stream ^tumble(rowtime, interval '2' hour)^ as rowtime\n"
         + "from orders\n"
         + "group by tumble(rowtime, interval '2' hour), productId")
-        .fails("Group function 'TUMBLE' can only appear in GROUP BY clause");
+        .fails("Group function '\\$TUMBLE' can only appear in GROUP BY clause");
     // TUMBLE with align argument
     sql("select stream\n"
         + "  tumble_end(rowtime, interval '2' hour, time '00:12:00') as rowtime\n"
@@ -10108,14 +10115,14 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "from orders\n"
         + "group by floor(rowtime to hour)")
         .fails("Call to auxiliary group function 'TUMBLE_END' must have "
-            + "matching call to group function 'TUMBLE' in GROUP BY clause");
+            + "matching call to group function '\\$TUMBLE' in GROUP BY clause");
     // Arguments to TUMBLE_END are slightly different to arguments to TUMBLE
     sql("select stream\n"
         + "  ^tumble_start(rowtime, interval '2' hour, time '00:13:00')^ as rowtime\n"
         + "from orders\n"
         + "group by tumble(rowtime, interval '2' hour, time '00:12:00')")
         .fails("Call to auxiliary group function 'TUMBLE_START' must have "
-            + "matching call to group function 'TUMBLE' in GROUP BY clause");
+            + "matching call to group function '\\$TUMBLE' in GROUP BY clause");
     // Even though align defaults to TIME '00:00:00', we need structural
     // equivalence, not semantic equivalence.
     sql("select stream\n"
@@ -10123,7 +10130,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "from orders\n"
         + "group by tumble(rowtime, interval '2' hour)")
         .fails("Call to auxiliary group function 'TUMBLE_END' must have "
-            + "matching call to group function 'TUMBLE' in GROUP BY clause");
+            + "matching call to group function '\\$TUMBLE' in GROUP BY clause");
     // TUMBLE query produces no monotonic column - OK
     sql("select stream productId\n"
         + "from orders\n"

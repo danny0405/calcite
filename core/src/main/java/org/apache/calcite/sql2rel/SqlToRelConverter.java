@@ -2453,7 +2453,13 @@ public class SqlToRelConverter {
     }
 
     RexNode rexCall = bb.convertExpression(call);
-    final List<RelNode> inputs = bb.retrieveCursors();
+    List<RelNode> inputs = new ArrayList<>();
+
+    if (rexCall.getKind() == SqlKind.TUMBLE) {
+      inputs.add(convertSelect((SqlSelect) call.getOperandList().get(0), false));
+    } else {
+      inputs = bb.retrieveCursors();
+    }
     Set<RelColumnMapping> columnMappings =
         getColumnMappings(operator);
     LogicalTableFunctionScan callRel =
