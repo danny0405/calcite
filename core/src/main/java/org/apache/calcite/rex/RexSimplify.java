@@ -678,6 +678,12 @@ public class RexSimplify {
     final RexNode simplified;
     switch (kind) {
     case IS_NULL:
+      // Because CAST may change nullability, which break the STRONG attribute,
+      // we should simplify out the cast before the STRONG attribute validation.
+      if (a.getKind() == SqlKind.CAST) {
+        a = simplifyCast((RexCall) a);
+      }
+      validateStrongPolicy(a);
       // x IS NULL ==> FALSE (if x is not nullable)
       simplified = simplifyIsNull(a);
       if (simplified != null) {
@@ -685,6 +691,12 @@ public class RexSimplify {
       }
       break;
     case IS_NOT_NULL:
+      // Because CAST may change nullability, which break the STRONG attribute,
+      // we should simplify out the cast before the STRONG attribute validation.
+      if (a.getKind() == SqlKind.CAST) {
+        a = simplifyCast((RexCall) a);
+      }
+      validateStrongPolicy(a);
       // x IS NOT NULL ==> TRUE (if x is not nullable)
       simplified = simplifyIsNotNull(a);
       if (simplified != null) {
@@ -733,6 +745,30 @@ public class RexSimplify {
     return null; // cannot be simplified
   }
 
+  /**
+   * Validates strong policy for specified {@link RexNode} rex node.
+   *
+   * @param rexNode rex node whose strong policy should be validated.
+   */
+  private void validateStrongPolicy(RexNode rexNode) {
+    switch (Strong.policy(rexNode.getKind())) {
+    case NOT_NULL:
+      assert !rexNode.getType().isNullable();
+      break;
+    case ANY:
+      final List<RexNode> operands = ((RexCall) rexNode).getOperands();
+      if (rexNode.getType().isNullable()) {
+        assert operands.stream()
+            .map(RexNode::getType)
+            .anyMatch(RelDataType::isNullable);
+      } else {
+        assert operands.stream()
+            .map(RexNode::getType)
+            .noneMatch(RelDataType::isNullable);
+      }
+    }
+  }
+
   private RexNode simplifyIsNotNull(RexNode a) {
     // Simplify the argument first,
     // call ourselves recursively to see whether we can make more progress.
@@ -746,7 +782,9 @@ public class RexSimplify {
     if (predicates.pulledUpPredicates.contains(a)) {
       return rexBuilder.makeLiteral(true);
     }
-    if (a.getKind() == SqlKind.CAST) {
+    switch (a.getKind()) {
+    case CAST:
+    case ITEM:
       return null;
     }
     switch (Strong.policy(a.getKind())) {
@@ -795,7 +833,9 @@ public class RexSimplify {
     if (RexUtil.isNull(a)) {
       return rexBuilder.makeLiteral(true);
     }
-    if (a.getKind() == SqlKind.CAST) {
+    switch (a.getKind()) {
+    case CAST:
+    case ITEM:
       return null;
     }
     switch (Strong.policy(a.getKind())) {
@@ -1788,6 +1828,14 @@ public class RexSimplify {
       final RexLiteral literal = (RexLiteral) operand;
       final Comparable value = literal.getValueAs(Comparable.class);
       final SqlTypeName typeName = literal.getTypeName();
+      // A literal is always not nullable, so the cast with type that only
+      // differs with nullability can always be eliminated.
+      if (SqlTypeUtil.equalSansNullability(
+          rexBuilder.typeFactory,
+          e.getType(),
+          operand.getType())) {
+        return operand;
+      }
 
       // First, try to remove the cast without changing the value.
       // makeCast and canRemoveCastFromLiteral have the same logic, so we are
