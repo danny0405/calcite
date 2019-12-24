@@ -2324,7 +2324,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         return registerFrom(parentScope, usingScope, register, node,
             enclosingNode, alias, extendList, forceNullable, true);
       }
-      // fall through
+    // fall through
     case SELECT:
     case UNION:
     case INTERSECT:
@@ -2332,7 +2332,6 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     case VALUES:
     case WITH:
     case OTHER_FUNCTION:
-    case TUMBLE:
       if (alias == null) {
         alias = deriveAlias(node, nextGeneratedId++);
       }
@@ -2790,25 +2789,6 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
           forceNullable);
       registerOperandSubQueries(parentScope, call, 0);
       scopes.put(node, parentScope);
-      break;
-    case TUMBLE:
-      call = (SqlCall) node;
-      // register subqueries before build namespace for TUMBLE because we need to know
-      // the scope of input relation.
-      registerSubQueries(parentScope, call);
-
-      // The scope of TUMBLE
-      ProcedureNamespace tumbleScope =
-          new ProcedureNamespace(
-              this,
-              scopes.get(call.getOperandList().get(0)),
-              call,
-              enclosingNode);
-      registerNamespace(
-          usingScope,
-          alias,
-          tumbleScope,
-          forceNullable);
       break;
     case OTHER_FUNCTION:
       call = (SqlCall) node;

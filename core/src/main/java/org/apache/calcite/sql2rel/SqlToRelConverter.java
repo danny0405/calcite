@@ -1264,6 +1264,11 @@ public class SqlToRelConverter {
           subQuery.logic, true, null);
       assert !converted.indicator;
       subQuery.expr = bb.register(converted.r, JoinRelType.LEFT);
+      // This is used when converting window table functions:
+      //
+      // select * from table(table emps, descriptor(deptno), interval '3' DAY)
+      //
+      bb.cursors.add(converted.r);
       return;
 
     default:
@@ -2453,13 +2458,7 @@ public class SqlToRelConverter {
     }
 
     RexNode rexCall = bb.convertExpression(call);
-    List<RelNode> inputs = new ArrayList<>();
-
-    if (rexCall.getKind() == SqlKind.TUMBLE) {
-      inputs.add(convertSelect((SqlSelect) call.getOperandList().get(0), false));
-    } else {
-      inputs = bb.retrieveCursors();
-    }
+    final List<RelNode> inputs = bb.retrieveCursors();
     Set<RelColumnMapping> columnMappings =
         getColumnMappings(operator);
     LogicalTableFunctionScan callRel =

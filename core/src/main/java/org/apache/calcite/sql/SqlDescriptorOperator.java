@@ -18,13 +18,11 @@ package org.apache.calcite.sql;
 
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
-import org.apache.calcite.sql.type.SqlSingleOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import static org.apache.calcite.util.Static.RESOURCE;
-
 
 /**
  * <p>DESCRIPTOR appears as an argument in a function. DESCRIPTOR accepts a list of
@@ -37,76 +35,41 @@ import static org.apache.calcite.util.Static.RESOURCE;
  */
 public class SqlDescriptorOperator extends SqlOperator {
   public SqlDescriptorOperator() {
-    super("DESCRIPTOR", SqlKind.DESCRIPTOR, 100, 100, null, null,  DESCRIPTOR_OPERAND_CHECKER);
+    super("DESCRIPTOR",
+        SqlKind.DESCRIPTOR,
+        100,
+        100,
+        opBinding -> opBinding.typeFactory.createSqlType(SqlTypeName.COLUMN_LIST),
+        null,
+        null);
+  }
+
+  @Override public RelDataType deriveType(
+      SqlValidator validator,
+      SqlValidatorScope scope, SqlCall call) {
+    return validator.getTypeFactory().createSqlType(SqlTypeName.COLUMN_LIST);
+  }
+
+  @Override public boolean checkOperandTypes(
+      SqlCallBinding callBinding,
+      boolean throwOnFailure) {
+    for (SqlNode operand : callBinding.getCall().getOperandList()) {
+      if (!(operand instanceof SqlIdentifier)
+          || ((SqlIdentifier) operand).isSimple()) {
+        if (throwOnFailure) {
+          throw SqlUtil.newContextException(operand.getParserPosition(),
+              RESOURCE.aliasMustBeSimpleIdentifier());
+        }
+      }
+    }
+    return true;
+  }
+
+  @Override public SqlOperandCountRange getOperandCountRange() {
+    return SqlOperandCountRanges.from(1);
   }
 
   @Override public SqlSyntax getSyntax() {
     return SqlSyntax.FUNCTION;
   }
-
-  @Override public RelDataType deriveType(SqlValidator validator,
-      SqlValidatorScope scope, SqlCall call) {
-    return validator.getTypeFactory().createSqlType(SqlTypeName.COLUMN_LIST);
-  }
-
-  public RelDataType inferReturnType(
-      SqlOperatorBinding opBinding) {
-    return opBinding.typeFactory.createSqlType(SqlTypeName.COLUMN_LIST);
-  }
-
-  private static final SqlSingleOperandTypeChecker DESCRIPTOR_OPERAND_CHECKER =
-      new SqlSingleOperandTypeChecker() {
-        public boolean checkSingleOperandType(
-            SqlCallBinding callBinding,
-            SqlNode node,
-            int iFormalOperand,
-            boolean throwOnFailure) {
-          if (!(node instanceof SqlIdentifier)) {
-            if (throwOnFailure) {
-              throw SqlUtil.newContextException(node.getParserPosition(),
-                  RESOURCE.aliasMustBeSimpleIdentifier());
-            } else {
-              return false;
-            }
-          }
-
-          SqlIdentifier identifier = (SqlIdentifier) node;
-          if (callBinding.getScope().resolveColumn(identifier.getSimple(), node) == null) {
-            if (throwOnFailure) {
-              throw SqlUtil.newContextException(node.getParserPosition(),
-                  RESOURCE.unknownIdentifier(identifier.getSimple()));
-            } else {
-              return false;
-            }
-          }
-          return true;
-        }
-
-        public boolean checkOperandTypes(
-            SqlCallBinding callBinding,
-            boolean throwOnFailure) {
-          for (int i = 0; i < callBinding.operands().size(); i++) {
-            if (!checkSingleOperandType(callBinding, callBinding.operand(i), i, throwOnFailure)) {
-              return false;
-            }
-          }
-          return true;
-        }
-
-        public SqlOperandCountRange getOperandCountRange() {
-          return SqlOperandCountRanges.between(0, Integer.MAX_VALUE);
-        }
-
-        public String getAllowedSignatures(SqlOperator op, String opName) {
-          return opName;
-        }
-
-        public boolean isOptional(int i) {
-          return false;
-        }
-
-        public Consistency getConsistency() {
-          return Consistency.NONE;
-        }
-      };
 }

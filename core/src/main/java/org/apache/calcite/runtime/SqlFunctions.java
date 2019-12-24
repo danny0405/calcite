@@ -2707,22 +2707,6 @@ public class SqlFunctions {
   }
 
   /**
-   * Find the fixed window for a timestamp given a window size and return the window start.
-   * Fixed windows counts from timestamp 0.
-   */
-  public static long tumbleWindowStart(long tsMillis, long sizeMillis) {
-    return tsMillis / sizeMillis * sizeMillis;
-  }
-
-  /**
-   * Find the fixed window for a timestamp given a window size and return the window end.
-   * Fixed windows counts from timestamp 0.
-   */
-  public static long tumbleWindowEnd(long tsMillis, long sizeMillis) {
-    return (tsMillis / sizeMillis + 1L) * sizeMillis;
-  }
-
-  /**
    * Implements the {@code .} (field access) operator on an object
    * whose type is not known until runtime.
    *

@@ -47,11 +47,11 @@ import org.apache.calcite.sql.SqlSampleSpec;
 import org.apache.calcite.sql.SqlSetOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.SqlSyntax;
-import org.apache.calcite.sql.SqlTableValuedFunctionWindowingOperator;
 import org.apache.calcite.sql.SqlUnnestOperator;
 import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.SqlValuesOperator;
 import org.apache.calcite.sql.SqlWindow;
+import org.apache.calcite.sql.SqlWindowTableFunction;
 import org.apache.calcite.sql.SqlWithinGroupOperator;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.type.InferTypes;
@@ -2258,14 +2258,7 @@ public class SqlStdOperatorTable extends ReflectiveSqlOperatorTable {
   public static final SqlOperator DESCRIPTOR = new SqlDescriptorOperator();
 
   /** TUMBLE as a table-value function. */
-  public static final SqlFunction TUMBLE_TABLE_FUNCTION =
-      new SqlTableValuedFunctionWindowingOperator(
-          SqlKind.TUMBLE.name(),
-          SqlKind.TUMBLE,
-          SqlTableValuedFunctionWindowingOperator.ARG0_TABLE_FUNCTION_WINDOWING, null,
-          SqlTableValuedFunctionWindowingOperator.TABLE_VALUED_FUNCTION_TUMBLE_CHECKER,
-          SqlFunctionCategory.SYSTEM
-      );
+  public static final SqlFunction TUMBLE_TVF = new SqlWindowTableFunction(SqlKind.TUMBLE.name());
 
   /** The {@code TUMBLE} group function.
    *

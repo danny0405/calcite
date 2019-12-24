@@ -61,7 +61,6 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -168,16 +167,16 @@ public class RexToLixTranslator {
         .translateList(program.getProjectList(), storageTypes);
   }
 
-  public static List<Expression> translateTableFunction(JavaTypeFactory typeFactory,
+  public static List<Expression> translateWindowTableFunctionParams(
+      JavaTypeFactory typeFactory,
       SqlConformance conformance,
       BlockBuilder blockBuilder,
       Expression root,
-      InputGetter inputGetter,
       RexCall rexCall) {
-    return new RexToLixTranslator(null, typeFactory, root, inputGetter,
+    return new RexToLixTranslator(null, typeFactory, root, null,
             blockBuilder, Collections.emptyMap(), new RexBuilder(typeFactory), conformance,
             null, null)
-            .translateTableFunctionCall(rexCall);
+            .translateWindowTableFunctionParams(rexCall);
   }
 
   /** Creates a translator for translating aggregate functions. */
@@ -948,31 +947,27 @@ public class RexToLixTranslator {
     return list;
   }
 
-  private List<Expression> translateTableFunctionCall(RexCall rexCall) {
-    if (rexCall.op.getKind() == SqlKind.TUMBLE) {
-      if (rexCall.operands.size() < 3) {
-        throw new AssertionError("TUMBLE should have at least 3 arguments.");
-      }
-      if (rexCall.getOperands().get(1) instanceof RexCall
-          && ((RexCall) rexCall.getOperands().get(1)).getOperator().getKind()
-              != SqlKind.DESCRIPTOR) {
-        throw new AssertionError("The second argument of TUMBLE should be a descriptor.");
-      }
-      if (!(rexCall.getOperands().get(2) instanceof RexLiteral)) {
-        throw new AssertionError("The third argument of TUMBLE should be a literal.");
-      }
-
-      Expression intervalExpression = translate(rexCall.getOperands().get(2));
-      RexCall descriptor = (RexCall) rexCall.getOperands().get(1);
-      List<Expression> translatedOperandsForTumble = new ArrayList<>();
-      translatedOperandsForTumble.add(
-          Expressions.constant(((RexInputRef) descriptor.getOperands().get(0)).getIndex()));
-      translatedOperandsForTumble.add(intervalExpression);
-
-      return translatedOperandsForTumble;
-    } else {
-      return Arrays.asList(translate(rexCall));
+  private List<Expression> translateWindowTableFunctionParams(RexCall rexCall) {
+    if (rexCall.operands.size() < 3) {
+      throw new AssertionError("TUMBLE should have at least 3 arguments.");
     }
+    if (rexCall.getOperands().get(1) instanceof RexCall
+        && ((RexCall) rexCall.getOperands().get(1)).getOperator().getKind()
+        != SqlKind.DESCRIPTOR) {
+      throw new AssertionError("The second argument of TUMBLE should be a descriptor.");
+    }
+    if (!(rexCall.getOperands().get(2) instanceof RexLiteral)) {
+      throw new AssertionError("The third argument of TUMBLE should be a literal.");
+    }
+
+    Expression intervalExpression = translate(rexCall.getOperands().get(2));
+    RexCall descriptor = (RexCall) rexCall.getOperands().get(1);
+    List<Expression> translatedOperands = new ArrayList<>();
+    translatedOperands.add(
+        Expressions.constant(((RexInputRef) descriptor.getOperands().get(0)).getIndex()));
+    translatedOperands.add(intervalExpression);
+
+    return translatedOperands;
   }
 
   public static Expression translateCondition(RexProgram program,
