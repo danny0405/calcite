@@ -183,7 +183,7 @@ public class ToLogicalConverter extends RelShuttleImpl {
       final Uncollect uncollect = (Uncollect) relNode;
       final RelNode input = visit(uncollect.getInput());
       return new Uncollect(input.getCluster(), input.getTraitSet(), input,
-          uncollect.withOrdinality);
+          uncollect.withOrdinality, null);
     }
 
     throw new AssertionError("Need to implement logical converter for "

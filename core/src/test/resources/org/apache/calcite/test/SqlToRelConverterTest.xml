@@ -5342,6 +5342,30 @@ LogicalProject(DEPTNO=[$0], EMPNO=[$7])
 ]]>
         </Resource>
     </TestCase>
+    <TestCase name="testAliasUnnestArrayPlanWithSingleColumn">
+        <Resource name="plan">
+            <![CDATA[
+LogicalProject(DEPTNO=[$0], EMPNO=[$5.EMPNO])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{2}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT_NESTED_EXPANDED]])
+    Uncollect
+      LogicalProject(EMPLOYEES=[$cor0.EMPLOYEES])
+        LogicalValues(tuples=[[{ 0 }]])
+]]>
+        </Resource>
+    </TestCase>
+    <TestCase name="testAliasUnnestArrayPlanWithDoubleColumn">
+        <Resource name="plan">
+            <![CDATA[
+LogicalProject(DEPTNO=[$0], E=[$5], EMPNO=[$6.EMPNO])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{2, 3}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT_NESTED_EXPANDED]])
+    Uncollect
+      LogicalProject(ADMINS=[$cor0.ADMINS], EMPLOYEES=[$cor0.EMPLOYEES])
+        LogicalValues(tuples=[[{ 0 }]])
+]]>
+        </Resource>
+    </TestCase>
     <TestCase name="testWithInsideWhereExistsDecorrelateRex">
         <Resource name="sql">
             <![CDATA[select * from emp

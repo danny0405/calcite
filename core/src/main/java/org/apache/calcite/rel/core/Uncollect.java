@@ -30,6 +30,9 @@ import org.apache.calcite.sql.SqlUnnestOperator;
 import org.apache.calcite.sql.type.MapSqlType;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import com.google.common.collect.ImmutableList;
+
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -46,21 +49,28 @@ import java.util.List;
 public class Uncollect extends SingleRel {
   public final boolean withOrdinality;
 
+  // To alias the items in Uncollect list, e.g., a, b, c in UNNEST(a, b, c),
+  // instead of fields within a struct field
+  private final List<String> fieldAliases;
+
   //~ Constructors -----------------------------------------------------------
 
   @Deprecated // to be removed before 2.0
   public Uncollect(RelOptCluster cluster, RelTraitSet traitSet,
       RelNode child) {
-    this(cluster, traitSet, child, false);
+    this(cluster, traitSet, child, false, null);
   }
 
   /** Creates an Uncollect.
    *
    * <p>Use {@link #create} unless you know what you're doing. */
   public Uncollect(RelOptCluster cluster, RelTraitSet traitSet, RelNode input,
-      boolean withOrdinality) {
+      boolean withOrdinality, List<String> fieldAliases) {
     super(cluster, traitSet, input);
     this.withOrdinality = withOrdinality;
+    this.fieldAliases = fieldAliases == null
+      ? Collections.emptyList()
+      : ImmutableList.copyOf(fieldAliases);
     assert deriveRowType() != null : "invalid child rowtype";
   }
 
@@ -69,7 +79,7 @@ public class Uncollect extends SingleRel {
    */
   public Uncollect(RelInput input) {
     this(input.getCluster(), input.getTraitSet(), input.getInput(),
-        input.getBoolean("withOrdinality", false));
+        input.getBoolean("withOrdinality", false), null);
   }
 
   /**
@@ -85,7 +95,7 @@ public class Uncollect extends SingleRel {
   public static Uncollect create(RelTraitSet traitSet, RelNode input,
       boolean withOrdinality) {
     final RelOptCluster cluster = input.getCluster();
-    return new Uncollect(cluster, traitSet, input, withOrdinality);
+    return new Uncollect(cluster, traitSet, input, withOrdinality, null);
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -102,11 +112,11 @@ public class Uncollect extends SingleRel {
 
   public RelNode copy(RelTraitSet traitSet, RelNode input) {
     assert traitSet.containsIfApplicable(Convention.NONE);
-    return new Uncollect(getCluster(), traitSet, input, withOrdinality);
+    return new Uncollect(getCluster(), traitSet, input, withOrdinality, fieldAliases);
   }
 
   protected RelDataType deriveRowType() {
-    return deriveUncollectRowType(input, withOrdinality);
+    return deriveUncollectRowType(input, withOrdinality, fieldAliases);
   }
 
   /**
@@ -118,9 +128,13 @@ public class Uncollect extends SingleRel {
    * column if {@code withOrdinality}.
    */
   public static RelDataType deriveUncollectRowType(RelNode rel,
-      boolean withOrdinality) {
+      boolean withOrdinality, List<String> fieldAliases) {
     RelDataType inputType = rel.getRowType();
     assert inputType.isStruct() : inputType + " is not a struct";
+
+    boolean requireAlias = !fieldAliases.isEmpty();
+    assert !requireAlias || fieldAliases.size() == inputType.getFieldCount();
+
     final List<RelDataTypeField> fields = inputType.getFieldList();
     final RelDataTypeFactory typeFactory = rel.getCluster().getTypeFactory();
     final RelDataTypeFactory.Builder builder = typeFactory.builder();
@@ -130,19 +144,24 @@ public class Uncollect extends SingleRel {
       // Component type is unknown to Uncollect, build a row type with input column name
       // and Any type.
       return builder
-          .add(fields.get(0).getName(), SqlTypeName.ANY)
+          .add(requireAlias ? fieldAliases.get(0) : fields.get(0).getName(), SqlTypeName.ANY)
           .nullable(true)
           .build();
     }
 
-    for (RelDataTypeField field : fields) {
+
+    for (int i = 0; i < fields.size(); i++) {
+      RelDataTypeField field = fields.get(i);
       if (field.getType() instanceof MapSqlType) {
         builder.add(SqlUnnestOperator.MAP_KEY_COLUMN_NAME, field.getType().getKeyType());
         builder.add(SqlUnnestOperator.MAP_VALUE_COLUMN_NAME, field.getType().getValueType());
       } else {
         RelDataType ret = field.getType().getComponentType();
         assert null != ret;
-        if (ret.isStruct()) {
+
+        if (requireAlias) {
+          builder.add(fieldAliases.get(i), ret);
+        } else if (ret.isStruct()) {
           builder.addAll(ret.getFieldList());
         } else {
           // Element type is not a record, use the field name of the element directly
@@ -150,6 +169,7 @@ public class Uncollect extends SingleRel {
         }
       }
     }
+
     if (withOrdinality) {
       builder.add(SqlUnnestOperator.ORDINALITY_COLUMN_NAME,
           SqlTypeName.INTEGER);

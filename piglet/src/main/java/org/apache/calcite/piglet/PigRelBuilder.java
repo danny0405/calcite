@@ -511,7 +511,7 @@ public class PigRelBuilder extends RelBuilder {
     // [CALCITE-3193] Add RelBuilder.uncollect method, and interface
     // UncollectFactory, to instantiate Uncollect
     Uncollect uncollect = new Uncollect(cluster,
-        cluster.traitSetOf(Convention.NONE), build(), false);
+        cluster.traitSetOf(Convention.NONE), build(), false, null);
     push(uncollect);
     return this;
   }

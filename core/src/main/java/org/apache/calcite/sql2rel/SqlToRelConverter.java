@@ -2066,8 +2066,15 @@ public class SqlToRelConverter {
 
     case AS:
       call = (SqlCall) from;
-      convertFrom(bb, call.operand(0));
-      if (call.operandCount() > 2
+      SqlNode firstOperand = call.operand(0);
+
+      if (firstOperand.getKind() == SqlKind.UNNEST) {
+        convertUnnest(bb, (SqlCall) firstOperand, getFieldAliases(call));
+      } else {
+        convertFrom(bb, firstOperand);
+      }
+      if (!validator.getConformance().allowAliasUnnestColumns()
+          && call.operandCount() > 2
           && (bb.root instanceof Values || bb.root instanceof Uncollect)) {
         final List<String> fieldNames = new ArrayList<>();
         for (SqlNode node : Util.skip(call.getOperandList(), 2)) {
@@ -2202,26 +2209,7 @@ public class SqlToRelConverter {
       return;
 
     case UNNEST:
-      call = (SqlCall) from;
-      final List<SqlNode> nodes = call.getOperandList();
-      final SqlUnnestOperator operator = (SqlUnnestOperator) call.getOperator();
-      for (SqlNode node : nodes) {
-        replaceSubQueries(bb, node, RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
-      }
-      final List<RexNode> exprs = new ArrayList<>();
-      final List<String> fieldNames = new ArrayList<>();
-      for (Ord<SqlNode> node : Ord.zip(nodes)) {
-        exprs.add(bb.convertExpression(node.e));
-        fieldNames.add(validator.deriveAlias(node.e, node.i));
-      }
-      RelNode child =
-          (null != bb.root) ? bb.root : LogicalValues.createOneRow(cluster);
-      relBuilder.push(child).projectNamed(exprs, fieldNames, false);
-
-      Uncollect uncollect =
-          new Uncollect(cluster, cluster.traitSetOf(Convention.NONE),
-              relBuilder.build(), operator.withOrdinality);
-      bb.setRoot(uncollect, true);
+      convertUnnest(bb, (SqlCall) from, null);
       return;
 
     case COLLECTION_TABLE:
@@ -2236,6 +2224,40 @@ public class SqlToRelConverter {
     default:
       throw new AssertionError("not a join operator " + from);
     }
+  }
+
+  private List<String> getFieldAliases(SqlCall asCall) {
+    if (!validator.getConformance().allowAliasUnnestColumns()) {
+      return null;
+    }
+
+    List<String> columnAliases = new ArrayList<>();
+    for (SqlNode sqlNode : Util.skip(asCall.getOperandList(), 2)) {
+      columnAliases.add(((SqlIdentifier) sqlNode).getSimple());
+    }
+    return columnAliases;
+  }
+
+  private void convertUnnest(Blackboard bb, SqlCall call, List<String> fieldAliases) {
+    final List<SqlNode> nodes = call.getOperandList();
+    final SqlUnnestOperator operator = (SqlUnnestOperator) call.getOperator();
+    for (SqlNode node : nodes) {
+      replaceSubQueries(bb, node, RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
+    }
+    final List<RexNode> exprs = new ArrayList<>();
+    for (Ord<SqlNode> node : Ord.zip(nodes)) {
+      exprs.add(
+          relBuilder.alias(bb.convertExpression(node.e), validator.deriveAlias(node.e, node.i)));
+    }
+    RelNode child =
+        (null != bb.root) ? bb.root : LogicalValues.createOneRow(cluster);
+    RelNode uncollect =
+        relBuilder
+          .push(child)
+          .project(exprs)
+          .uncollect(fieldAliases, operator.withOrdinality)
+          .build();
+    bb.setRoot(uncollect, true);
   }
 
   protected void convertMatchRecognize(Blackboard bb, SqlCall call) {
