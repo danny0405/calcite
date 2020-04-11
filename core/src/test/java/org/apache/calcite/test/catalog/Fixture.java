@@ -80,8 +80,11 @@ final class Fixture extends AbstractFixture {
   final RelDataType empRecordType = typeFactory.builder()
       .add("EMPNO", intType)
       .add("ENAME", varchar10Type)
-      .add("DETAIL", typeFactory.builder()
-      .add("SKILLS", array(skillRecordType)).build())
+      .add("DETAIL",
+          typeFactory.builder()
+              .add("SKILLS",
+                  array(skillRecordType))
+              .build())
       .kind(StructKind.PEEK_FIELDS)
       .build();
   final RelDataType empListType = array(empRecordType);

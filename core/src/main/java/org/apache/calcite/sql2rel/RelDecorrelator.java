@@ -41,6 +41,7 @@ import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.core.Sort;
+import org.apache.calcite.rel.core.Uncollect;
 import org.apache.calcite.rel.core.Values;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalCorrelate;
@@ -1036,6 +1037,18 @@ public class RelDecorrelator implements ReflectiveVisitor {
   public Frame decorrelateRel(LogicalTableFunctionScan rel) {
     if (RexUtil.containsCorrelation(rel.getCall())) {
       return null;
+    }
+    return decorrelateRel((RelNode) rel);
+  }
+
+  public Frame decorrelateRel(Uncollect rel) {
+    final RelNode input = rel.getInput();
+    if (input instanceof Project) {
+      for (RexNode node : ((Project) input).getProjects()) {
+        if (RexUtil.containsCorrelation(node)) {
+          return null;
+        }
+      }
     }
     return decorrelateRel((RelNode) rel);
   }

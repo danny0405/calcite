@@ -2068,13 +2068,9 @@ public class SqlToRelConverter {
       call = (SqlCall) from;
       SqlNode firstOperand = call.operand(0);
 
-      if (firstOperand.getKind() == SqlKind.UNNEST) {
-        convertUnnest(bb, (SqlCall) firstOperand, getFieldAliases(call));
-      } else {
-        convertFrom(bb, firstOperand);
-      }
-      if (!validator.getConformance().allowAliasUnnestColumns()
-          && call.operandCount() > 2
+      convertFrom(bb, firstOperand);
+
+      if (call.operandCount() > 2
           && (bb.root instanceof Values || bb.root instanceof Uncollect)) {
         final List<String> fieldNames = new ArrayList<>();
         for (SqlNode node : Util.skip(call.getOperandList(), 2)) {
@@ -2209,7 +2205,7 @@ public class SqlToRelConverter {
       return;
 
     case UNNEST:
-      convertUnnest(bb, (SqlCall) from, null);
+      convertUnnest(bb, (SqlCall) from);
       return;
 
     case COLLECTION_TABLE:
@@ -2226,19 +2222,7 @@ public class SqlToRelConverter {
     }
   }
 
-  private List<String> getFieldAliases(SqlCall asCall) {
-    if (!validator.getConformance().allowAliasUnnestColumns()) {
-      return null;
-    }
-
-    List<String> columnAliases = new ArrayList<>();
-    for (SqlNode sqlNode : Util.skip(asCall.getOperandList(), 2)) {
-      columnAliases.add(((SqlIdentifier) sqlNode).getSimple());
-    }
-    return columnAliases;
-  }
-
-  private void convertUnnest(Blackboard bb, SqlCall call, List<String> fieldAliases) {
+  private void convertUnnest(Blackboard bb, SqlCall call) {
     final List<SqlNode> nodes = call.getOperandList();
     final SqlUnnestOperator operator = (SqlUnnestOperator) call.getOperator();
     for (SqlNode node : nodes) {
@@ -2255,7 +2239,7 @@ public class SqlToRelConverter {
         relBuilder
           .push(child)
           .project(exprs)
-          .uncollect(fieldAliases, operator.withOrdinality)
+          .uncollect(Collections.emptyList(), operator.withOrdinality)
           .build();
     bb.setRoot(uncollect, true);
   }

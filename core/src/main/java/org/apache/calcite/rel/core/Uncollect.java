@@ -49,28 +49,29 @@ import java.util.List;
 public class Uncollect extends SingleRel {
   public final boolean withOrdinality;
 
-  // To alias the items in Uncollect list, e.g., a, b, c in UNNEST(a, b, c),
-  // instead of fields within a struct field
-  private final List<String> fieldAliases;
+  // To alias the items in Uncollect list,
+  // i.e., "UNNEST(a, b, c) as T(d, e, f)"
+  // outputs as row type Record(d, e, f) where the field "d" has element type of "a".
+  // Without the aliases, the expression "UNNEST(a)" outputs row type
+  // same with element type of "a".
+  private final List<String> foldColumns;
 
   //~ Constructors -----------------------------------------------------------
 
   @Deprecated // to be removed before 2.0
   public Uncollect(RelOptCluster cluster, RelTraitSet traitSet,
       RelNode child) {
-    this(cluster, traitSet, child, false, null);
+    this(cluster, traitSet, child, false, Collections.emptyList());
   }
 
   /** Creates an Uncollect.
    *
    * <p>Use {@link #create} unless you know what you're doing. */
   public Uncollect(RelOptCluster cluster, RelTraitSet traitSet, RelNode input,
-      boolean withOrdinality, List<String> fieldAliases) {
+      boolean withOrdinality, List<String> foldColumns) {
     super(cluster, traitSet, input);
     this.withOrdinality = withOrdinality;
-    this.fieldAliases = fieldAliases == null
-      ? Collections.emptyList()
-      : ImmutableList.copyOf(fieldAliases);
+    this.foldColumns = ImmutableList.copyOf(foldColumns);
     assert deriveRowType() != null : "invalid child rowtype";
   }
 
@@ -79,7 +80,8 @@ public class Uncollect extends SingleRel {
    */
   public Uncollect(RelInput input) {
     this(input.getCluster(), input.getTraitSet(), input.getInput(),
-        input.getBoolean("withOrdinality", false), null);
+        input.getBoolean("withOrdinality", false),
+        Collections.emptyList());
   }
 
   /**
@@ -95,7 +97,25 @@ public class Uncollect extends SingleRel {
   public static Uncollect create(RelTraitSet traitSet, RelNode input,
       boolean withOrdinality) {
     final RelOptCluster cluster = input.getCluster();
-    return new Uncollect(cluster, traitSet, input, withOrdinality, null);
+    return new Uncollect(cluster, traitSet, input, withOrdinality, Collections.emptyList());
+  }
+
+  /**
+   * Creates an Uncollect.
+   *
+   * <p>Each field of the input relational expression must be an array or
+   * multiset.
+   *
+   * @param input    Input relational expression
+   * @param withOrdinality Whether output should contain an ORDINALITY column
+   * @param fieldAliases Field aliases
+   */
+  public static Uncollect create(RelNode input, boolean withOrdinality,
+        List<String> fieldAliases) {
+    final RelOptCluster cluster = input.getCluster();
+    final RelTraitSet traitSet =
+        cluster.traitSet().replace(Convention.NONE);
+    return new Uncollect(cluster, traitSet, input, withOrdinality, fieldAliases);
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -112,11 +132,11 @@ public class Uncollect extends SingleRel {
 
   public RelNode copy(RelTraitSet traitSet, RelNode input) {
     assert traitSet.containsIfApplicable(Convention.NONE);
-    return new Uncollect(getCluster(), traitSet, input, withOrdinality, fieldAliases);
+    return new Uncollect(getCluster(), traitSet, input, withOrdinality, foldColumns);
   }
 
   protected RelDataType deriveRowType() {
-    return deriveUncollectRowType(input, withOrdinality, fieldAliases);
+    return deriveUncollectRowType(input, withOrdinality, foldColumns);
   }
 
   /**
@@ -124,16 +144,19 @@ public class Uncollect extends SingleRel {
    * relational expression.
    *
    * <p>Each column in the relational expression must be a multiset of structs
-   * or an array. The return type is the type of that column, plus an ORDINALITY
-   * column if {@code withOrdinality}.
+   * or an array. The return type is the combination of expanding element types from each column.
+   * If {@code foldColumns} is not empty, the element types would not expand, each column element
+   * outputs as a whole(the return type has same column types as input type).
+   *
+   * <p>The return type would plus an ORDINALITY column if {@code withOrdinality}.
    */
   public static RelDataType deriveUncollectRowType(RelNode rel,
-      boolean withOrdinality, List<String> fieldAliases) {
+      boolean withOrdinality, List<String> foldColumns) {
     RelDataType inputType = rel.getRowType();
     assert inputType.isStruct() : inputType + " is not a struct";
 
-    boolean requireAlias = !fieldAliases.isEmpty();
-    assert !requireAlias || fieldAliases.size() == inputType.getFieldCount();
+    boolean foldColumn = !foldColumns.isEmpty();
+    assert !foldColumn || foldColumns.size() == inputType.getFieldCount();
 
     final List<RelDataTypeField> fields = inputType.getFieldList();
     final RelDataTypeFactory typeFactory = rel.getCluster().getTypeFactory();
@@ -144,11 +167,10 @@ public class Uncollect extends SingleRel {
       // Component type is unknown to Uncollect, build a row type with input column name
       // and Any type.
       return builder
-          .add(requireAlias ? fieldAliases.get(0) : fields.get(0).getName(), SqlTypeName.ANY)
+          .add(foldColumn ? foldColumns.get(0) : fields.get(0).getName(), SqlTypeName.ANY)
           .nullable(true)
           .build();
     }
-
 
     for (int i = 0; i < fields.size(); i++) {
       RelDataTypeField field = fields.get(i);
@@ -159,8 +181,8 @@ public class Uncollect extends SingleRel {
         RelDataType ret = field.getType().getComponentType();
         assert null != ret;
 
-        if (requireAlias) {
-          builder.add(fieldAliases.get(i), ret);
+        if (foldColumn) {
+          builder.add(foldColumns.get(i), ret);
         } else if (ret.isStruct()) {
           builder.addAll(ret.getFieldList());
         } else {

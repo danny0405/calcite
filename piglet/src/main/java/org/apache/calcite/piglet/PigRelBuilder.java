@@ -510,8 +510,10 @@ public class PigRelBuilder extends RelBuilder {
   public RelBuilder multiSetFlatten() {
     // [CALCITE-3193] Add RelBuilder.uncollect method, and interface
     // UncollectFactory, to instantiate Uncollect
-    Uncollect uncollect = new Uncollect(cluster,
-        cluster.traitSetOf(Convention.NONE), build(), false, null);
+    Uncollect uncollect = Uncollect.create(
+        cluster.traitSetOf(Convention.NONE),
+        build(),
+        false);
     push(uncollect);
     return this;
   }

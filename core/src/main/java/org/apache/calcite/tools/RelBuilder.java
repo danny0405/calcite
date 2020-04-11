@@ -20,7 +20,6 @@ import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.function.Experimental;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.Contexts;
-import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptPredicateList;
 import org.apache.calcite.plan.RelOptSchema;
@@ -1525,16 +1524,22 @@ public class RelBuilder {
     return this;
   }
 
-  public RelBuilder uncollect(List<String> fieldAliases, boolean withOrdinality) {
-    Frame frame = stack.pop();
+  /**
+   * Creates an {@link Uncollect} with given field aliases.
+   *
+   * @param foldColumns   Field aliases
+   * @param withOrdinality If {@code withOrdinality}, the output contains an extra
+   * {@code ORDINALITY} column
+   */
+  public RelBuilder uncollect(List<String> foldColumns, boolean withOrdinality) {
+    final Frame frame = peek_();
+    assert frame != null : "No relational expression to build UnCollect";
     stack.push(
         new Frame(
-          new Uncollect(
-            cluster,
-            cluster.traitSetOf(Convention.NONE),
-            frame.rel,
-            withOrdinality,
-            fieldAliases)));
+            Uncollect.create(
+                frame.rel,
+                withOrdinality,
+                Objects.requireNonNull(foldColumns))));
     return this;
   }
 
@@ -1573,6 +1578,16 @@ public class RelBuilder {
         b.add(p.left, p.right.getType());
       }
       return values(v.tuples, b.build());
+    }
+    if (peek() instanceof Uncollect) {
+      // Special treatment for Uncollect. Re-build it rather than add a project
+      // if the new field names has same number with its input fields.
+      final Uncollect uc = (Uncollect) build();
+      if (fieldNames.size() == uc.getInput().getRowType().getFieldCount()) {
+        stack.pop();
+        return push(uc.getInput())
+            .uncollect(fieldNames, uc.withOrdinality);
+      }
     }
 
     return project(fields(), newFieldNames, true);

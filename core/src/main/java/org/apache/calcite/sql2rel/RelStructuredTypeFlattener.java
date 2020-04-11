@@ -508,10 +508,19 @@ public class RelStructuredTypeFlattener implements ReflectiveVisitor {
     RelNode newInput = getNewForOldRel(rel.getInput());
     List<RexNode> newProjects = Pair.left(flattenedExpList);
     List<String> newNames = Pair.right(flattenedExpList);
-    final RelNode newRel = relBuilder.push(newInput)
-        .projectNamed(newProjects, newNames, true)
-        .hints(rel.getHints())
-        .build();
+    List<String> newInputFields = newInput.getRowType().getFieldNames();
+    final RelNode newRel;
+    if (newNames.stream().anyMatch(name -> !newInputFields.contains(name))) {
+      // Sanity check, the flatten of input is invalid,
+      // either there was no flattening or the flattening has wrong names.
+      newRel = rel.copy(rel.getTraitSet(),
+          rel.getInput(), rel.getProjects(), rel.getRowType());
+    } else {
+      newRel = relBuilder.push(newInput)
+          .projectNamed(newProjects, newNames, true)
+          .hints(rel.getHints())
+          .build();
+    }
     setNewForOldRel(rel, newRel);
   }
 
