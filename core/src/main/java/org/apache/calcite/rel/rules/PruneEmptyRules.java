@@ -42,6 +42,7 @@ import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -277,7 +278,11 @@ public abstract class PruneEmptyRules {
           if (sort.fetch != null
               && !(sort.fetch instanceof RexDynamicParam)
               && RexLiteral.intValue(sort.fetch) == 0) {
-            call.transformTo(call.builder().push(sort).empty().build());
+            RelNode emptyValues = call.builder().push(sort).empty().build();
+            emptyValues = emptyValues.copy(
+                emptyValues.getTraitSet().replace(sort.getCollation()),
+                Collections.emptyList());
+            call.transformTo(emptyValues);
           }
         }
       };
@@ -375,7 +380,7 @@ public abstract class PruneEmptyRules {
     /** Creates a simple RemoveEmptySingleRule. */
     public <R extends SingleRel> RemoveEmptySingleRule(Class<R> clazz,
         String description) {
-      this(clazz, (Predicate<R>) project -> true, RelFactories.LOGICAL_BUILDER,
+      this(clazz, (Predicate<R>) singleRel -> true, RelFactories.LOGICAL_BUILDER,
           description);
     }
 
@@ -400,7 +405,13 @@ public abstract class PruneEmptyRules {
 
     public void onMatch(RelOptRuleCall call) {
       SingleRel single = call.rel(0);
-      call.transformTo(call.builder().push(single).empty().build());
+      RelNode emptyValues = call.builder().push(single).empty().build();
+      if (single instanceof Sort) {
+        emptyValues = emptyValues.copy(
+            emptyValues.getTraitSet().replace(((Sort) single).getCollation()),
+            Collections.emptyList());
+      }
+      call.transformTo(emptyValues);
     }
   }
 }

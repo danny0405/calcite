@@ -65,9 +65,20 @@ public class EnumerableValues extends Values implements EnumerableRel {
     return new EnumerableValues(cluster, rowType, tuples, traitSet);
   }
 
+  /** Creates an EnumerableValues. */
+  public static EnumerableValues create(Values input) {
+    final RelOptCluster cluster = input.getCluster();
+    final ImmutableList<ImmutableList<RexLiteral>> tuples = input.getTuples();
+    final RelDataType rowType = input.getRowType();
+    final RelTraitSet traitSet =
+        input.getTraitSet()
+            .replace(EnumerableConvention.INSTANCE);
+    return new EnumerableValues(cluster, rowType, tuples, traitSet);
+  }
+
   @Override public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
     assert inputs.isEmpty();
-    return create(getCluster(), rowType, tuples);
+    return new EnumerableValues(getCluster(), rowType, tuples, traitSet);
   }
 
   public Result implement(EnumerableRelImplementor implementor, Prefer pref) {
