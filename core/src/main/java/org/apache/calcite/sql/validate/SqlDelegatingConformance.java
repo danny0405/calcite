@@ -73,8 +73,8 @@ public class SqlDelegatingConformance extends SqlAbstractConformance {
     return delegate.allowNiladicParentheses();
   }
 
-  @Override public boolean allowAliasUnnestColumns() {
-    return delegate.allowAliasUnnestColumns();
+  @Override public boolean allowAliasUnnestItems() {
+    return delegate.allowAliasUnnestItems();
   }
 
 }

@@ -111,7 +111,7 @@ public abstract class SqlAbstractConformance implements SqlConformance {
     return SqlConformanceEnum.DEFAULT.allowQualifyingCommonColumn();
   }
 
-  public boolean allowAliasUnnestColumns() {
-    return SqlConformanceEnum.DEFAULT.allowAliasUnnestColumns();
+  public boolean allowAliasUnnestItems() {
+    return SqlConformanceEnum.DEFAULT.allowAliasUnnestItems();
   }
 }

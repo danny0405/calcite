@@ -348,7 +348,7 @@ public enum SqlConformanceEnum implements SqlConformance {
     }
   }
 
-  @Override public boolean allowAliasUnnestColumns() {
+  @Override public boolean allowAliasUnnestItems() {
     switch (this) {
     case PRESTO:
       return true;

@@ -1525,7 +1525,14 @@ public class RelBuilder {
     return this;
   }
 
-  public RelBuilder uncollect(List<String> fieldAliases, boolean withOrdinality) {
+  /**
+   * Creates an {@link Uncollect} with given item aliases.
+   *
+   * @param itemAliases   Operand item aliases
+   * @param withOrdinality If {@code withOrdinality}, the output contains an extra
+   * {@code ORDINALITY} column
+   */
+  public RelBuilder uncollect(List<String> itemAliases, boolean withOrdinality) {
     Frame frame = stack.pop();
     stack.push(
         new Frame(
@@ -1534,7 +1541,7 @@ public class RelBuilder {
             cluster.traitSetOf(Convention.NONE),
             frame.rel,
             withOrdinality,
-            fieldAliases)));
+            itemAliases)));
     return this;
   }
 

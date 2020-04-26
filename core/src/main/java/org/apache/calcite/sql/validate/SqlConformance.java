@@ -258,7 +258,7 @@ public interface SqlConformance {
   boolean isInsertSubsetColumnsAllowed();
 
   /**
-   * Whether directly alias array columns in UNNEST.
+   * Whether directly alias array items in UNNEST.
    *
    * <p>E.g. in UNNEST(a_array, b_array) AS T(a, b),
    * a and b will be aliases of elements in a_array and b_array
@@ -272,7 +272,7 @@ public interface SqlConformance {
    * {@link SqlConformanceEnum#PRESTO};
    * false otherwise.
    */
-  boolean allowAliasUnnestColumns();
+  boolean allowAliasUnnestItems();
 
   /**
    * Whether to allow parentheses to be specified in calls to niladic functions

@@ -1316,7 +1316,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     final String sql = "select d.deptno, employee.empno\n"
         + "from dept_nested_expanded as d,\n"
         + " UNNEST(d.employees) as t(employee)";
-    sql(sql).conformance(SqlConformanceEnum.PRESTO).decorrelate(false).ok();
+    sql(sql).conformance(SqlConformanceEnum.PRESTO).ok();
   }
 
   /**
@@ -1328,7 +1328,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     final String sql = "select d.deptno, e, k.empno\n"
         + "from dept_nested_expanded as d CROSS JOIN\n"
         + " UNNEST(d.admins, d.employees) as t(e, k)";
-    sql(sql).conformance(SqlConformanceEnum.PRESTO).decorrelate(false).ok();
+    sql(sql).conformance(SqlConformanceEnum.PRESTO).ok();
   }
 
   @Test void testArrayOfRecord() {
