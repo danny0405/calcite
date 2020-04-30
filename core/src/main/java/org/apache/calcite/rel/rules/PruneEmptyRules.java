@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.rel.rules;
 
+import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
@@ -280,7 +281,7 @@ public abstract class PruneEmptyRules {
               && RexLiteral.intValue(sort.fetch) == 0) {
             RelNode emptyValues = call.builder().push(sort).empty().build();
             emptyValues = emptyValues.copy(
-                emptyValues.getTraitSet().replace(sort.getCollation()),
+                sort.getTraitSet().replace(Convention.NONE),
                 Collections.emptyList());
             call.transformTo(emptyValues);
           }
@@ -405,12 +406,14 @@ public abstract class PruneEmptyRules {
 
     public void onMatch(RelOptRuleCall call) {
       SingleRel single = call.rel(0);
-      RelNode emptyValues = call.builder().push(single).empty().build();
-      if (single instanceof Sort) {
-        emptyValues = emptyValues.copy(
-            emptyValues.getTraitSet().replace(((Sort) single).getCollation()),
-            Collections.emptyList());
-      }
+      RelNode emptyValues = call.builder()
+          .push(single)
+          .empty()
+          .build()
+          .copy(
+              single.getTraitSet()
+                  .replace(Convention.NONE),
+              Collections.emptyList());
       call.transformTo(emptyValues);
     }
   }

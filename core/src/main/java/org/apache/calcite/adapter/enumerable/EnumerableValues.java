@@ -54,25 +54,18 @@ public class EnumerableValues extends Values implements EnumerableRel {
   /** Creates an EnumerableValues. */
   public static EnumerableValues create(RelOptCluster cluster,
       final RelDataType rowType,
-      final ImmutableList<ImmutableList<RexLiteral>> tuples) {
+      final ImmutableList<ImmutableList<RexLiteral>> tuples,
+      RelTraitSet traitSet) {
     final RelMetadataQuery mq = cluster.getMetadataQuery();
-    final RelTraitSet traitSet =
-        cluster.traitSetOf(EnumerableConvention.INSTANCE)
-            .replaceIfs(RelCollationTraitDef.INSTANCE,
-                () -> RelMdCollation.values(mq, rowType, tuples))
-            .replaceIf(RelDistributionTraitDef.INSTANCE,
-                () -> RelMdDistribution.values(rowType, tuples));
-    return new EnumerableValues(cluster, rowType, tuples, traitSet);
-  }
-
-  /** Creates an EnumerableValues. */
-  public static EnumerableValues create(Values input) {
-    final RelOptCluster cluster = input.getCluster();
-    final ImmutableList<ImmutableList<RexLiteral>> tuples = input.getTuples();
-    final RelDataType rowType = input.getRowType();
-    final RelTraitSet traitSet =
-        input.getTraitSet()
-            .replace(EnumerableConvention.INSTANCE);
+    if (traitSet == null) {
+      traitSet = cluster.traitSetOf(EnumerableConvention.INSTANCE)
+          .replaceIfs(RelCollationTraitDef.INSTANCE,
+              () -> RelMdCollation.values(mq, rowType, tuples))
+          .replaceIf(RelDistributionTraitDef.INSTANCE,
+              () -> RelMdDistribution.values(rowType, tuples));
+    } else {
+      traitSet = traitSet.plus(EnumerableConvention.INSTANCE);
+    }
     return new EnumerableValues(cluster, rowType, tuples, traitSet);
   }
 
