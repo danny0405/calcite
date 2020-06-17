@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -60,23 +61,8 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 1, jvmArgsPrepend = "-Xmx1024m")
 public class DigestBenchmark {
 
-  private static class StringDigest {
-    final String digest;
-
-    private StringDigest(String digest) {
-      this.digest = digest;
-    }
-
-    @Override public boolean equals(Object o) {
-      return o == this
-          || o instanceof StringDigest
-          && ((StringDigest) o).digest.equals(digest);
-    }
-
-    @Override public int hashCode() {
-      return digest.hashCode();
-    }
-  }
+  /** Enumeration of digest type, for pure string and for object#equals. **/
+  public enum DigestType { STRING, OBJECT }
 
   /**
    * State object for the benchmarks.
@@ -94,14 +80,14 @@ public class DigestBenchmark {
      * The number of disjunctions for each generated query.
      */
     @Param({"1", "10", "100"})
-    int whereClauseDisjunctions;
+    int disjunctions;
 
-    @Param({"true"})
-    boolean isStringDigest;
+    @Param({"STRING"})
+    DigestType digestType;
 
     List<RelNode> rels;
 
-    Map<Pair<StringDigest, List<RelDataType>>, RelNode> oldDigestToRelMap;
+    Map<Pair<String, List<RelDataType>>, RelNode> oldDigestToRelMap;
 
     Map<Digest, RelNode> newDigestToRelMap;
 
@@ -117,85 +103,149 @@ public class DigestBenchmark {
     }
 
     private void putToMap(RelNode node) {
-      if (isStringDigest) {
+      switch (digestType) {
+      case STRING:
         oldDigestToRelMap.put(
             Pair.of(
-                new StringDigest(node.toString()),
+                node.toString(),
                 Pair.right(node.getRowType().getFieldList())),
             node);
-      } else {
+        break;
+      case OBJECT:
         newDigestToRelMap.put(node.getDigest(), node);
       }
     }
 
-    @Setup(Level.Invocation)
+    @Setup(Level.Iteration)
     public void setUp() {
       rels = new ArrayList<>();
       oldDigestToRelMap = new HashMap<>();
       newDigestToRelMap = new HashMap<>();
 
-      VolcanoPlanner planner = new VolcanoPlanner();
-
-      RelDataTypeFactory typeFactory =
-          new JavaTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
-      RelOptCluster cluster = RelOptCluster.create(planner, new RexBuilder(typeFactory));
-
-      RelBuilder relBuilder = RelFactories.LOGICAL_BUILDER.create(cluster, null);
-      // Generates queries of the following form depending on the configuration parameters.
-      // SELECT `t`.`name`
-      // FROM (VALUES  (1, 'name0')) AS `t` (`id`, `name`)
-      // INNER JOIN (VALUES  (1, 'name1')) AS `t` (`id`, `name`) AS `t0` ON `t`.`id` = `t0`.`id`
-      // INNER JOIN (VALUES  (2, 'name2')) AS `t` (`id`, `name`) AS `t1` ON `t`.`id` = `t1`.`id`
-      // INNER JOIN (VALUES  (3, 'name3')) AS `t` (`id`, `name`) AS `t2` ON `t`.`id` = `t2`.`id`
-      // INNER JOIN ...
-      // WHERE
-      //  `t`.`name` = 'name0' OR
-      //  `t`.`name` = 'name1' OR
-      //  `t`.`name` = 'name2' OR
-      //  ...
-      //  OR `t`.`id` = 1
-      relBuilder.values(new String[]{"id", "name"}, 1, "name0");
-      for (int j = 1; j <= joins; j++) {
-        relBuilder
-            .values(new String[]{"id", "name"}, j, "name" + j)
-            .join(JoinRelType.INNER, "id");
-      }
-
-      List<RexNode> disjunctions = new ArrayList<>();
-      for (int j = 0; j < whereClauseDisjunctions; j++) {
-        disjunctions.add(
-            relBuilder.equals(
-                relBuilder.field("name"),
-                relBuilder.literal("name" + j)));
-      }
-      disjunctions.add(
-          relBuilder.equals(
-              relBuilder.field("id"),
-              relBuilder.literal(1)));
-      RelNode query =
-          relBuilder
-              .filter(relBuilder.or(disjunctions))
-              .project(relBuilder.field("name"))
-              .build();
+      RelNode query = generatesRel(joins, disjunctions);
 
       initializeState(query);
     }
   }
 
+  /**
+   * State object for the benchmarks.
+   */
+  @State(Scope.Thread)
+  public static class RandomDigestState {
+    @Param({"11", "31", "63"})
+    private long seed;
+
+    List<RelNode> rels;
+
+    Map<Digest, RelNode> digestToRelMap;
+
+    private void initializeState(RelNode query) {
+      RelVisitor visitor = new RelVisitor() {
+        @Override public void visit(RelNode node, int ordinal, RelNode parent) {
+          rels.add(node);
+          digestToRelMap.put(node.getDigest(), node);
+          super.visit(node, ordinal, parent);
+        }
+      };
+      visitor.go(query);
+    }
+
+    @Setup(Level.Iteration)
+    public void setUp() {
+      Random r = new Random(seed);
+      rels = new ArrayList<>();
+      digestToRelMap = new HashMap<>();
+
+      RelNode query = generatesRel(
+          r.nextInt(20) + 1,
+          r.nextInt(100) + 1);
+
+      initializeState(query);
+    }
+  }
+
+  /**
+   * Generates a rel with given parameters.
+   *
+   * @param joins           The number of join nodes
+   * @param disjunctionsNum The number of disjunction predicates
+   */
+  private static RelNode generatesRel(int joins, int disjunctionsNum) {
+    VolcanoPlanner planner = new VolcanoPlanner();
+
+    RelDataTypeFactory typeFactory =
+        new JavaTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+    RelOptCluster cluster = RelOptCluster.create(planner, new RexBuilder(typeFactory));
+
+    RelBuilder relBuilder = RelFactories.LOGICAL_BUILDER.create(cluster, null);
+    // Generates queries of the following form depending on the configuration parameters.
+    // SELECT `t`.`name`
+    // FROM (VALUES  (1, 'name0')) AS `t` (`id`, `name`)
+    // INNER JOIN (VALUES  (1, 'name1')) AS `t` (`id`, `name`) AS `t0` ON `t`.`id` = `t0`.`id`
+    // INNER JOIN (VALUES  (2, 'name2')) AS `t` (`id`, `name`) AS `t1` ON `t`.`id` = `t1`.`id`
+    // INNER JOIN (VALUES  (3, 'name3')) AS `t` (`id`, `name`) AS `t2` ON `t`.`id` = `t2`.`id`
+    // INNER JOIN ...
+    // WHERE
+    //  `t`.`name` = 'name0' OR
+    //  `t`.`name` = 'name1' OR
+    //  `t`.`name` = 'name2' OR
+    //  ...
+    //  OR `t`.`id` = 1
+    relBuilder.values(new String[]{"id", "name"}, 1, "name0");
+    for (int j = 1; j <= joins; j++) {
+      relBuilder
+          .values(new String[]{"id", "name"}, j, "name" + j)
+          .join(JoinRelType.INNER, "id");
+    }
+
+    List<RexNode> disjunctions = new ArrayList<>();
+    for (int j = 0; j < disjunctionsNum; j++) {
+      disjunctions.add(
+          relBuilder.equals(
+              relBuilder.field("name"),
+              relBuilder.literal("name" + j)));
+    }
+    disjunctions.add(
+        relBuilder.equals(
+            relBuilder.field("id"),
+            relBuilder.literal(1)));
+    return relBuilder
+        .filter(relBuilder.or(disjunctions))
+        .project(relBuilder.field("name"))
+        .build();
+  }
+
   @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @OutputTimeUnit(TimeUnit.MICROSECONDS)
-  public void getRelFromDigestToRelMap(DigestState state) {
+  public List<RelNode> getRel(DigestState state) {
+    List<RelNode> ret = new ArrayList<>(state.rels.size());
     for (RelNode rel : state.rels) {
-      if (state.isStringDigest) {
-        state.oldDigestToRelMap.get(
-            Pair.of(
-                new StringDigest(rel.toString()),
-                Pair.right(rel.getRowType().getFieldList())));
-      } else {
-        state.newDigestToRelMap.get(rel.getDigest());
+      switch (state.digestType) {
+      case STRING:
+        ret.add(state.oldDigestToRelMap
+            .get(
+                Pair.of(
+                    rel.toString(),
+                    Pair.right(rel.getRowType().getFieldList()))));
+        break;
+      case OBJECT:
+        ret.add(state.newDigestToRelMap.get(rel.getDigest()));
       }
     }
+    return ret;
+  }
+
+  @Benchmark
+  @BenchmarkMode(Mode.AverageTime)
+  @OutputTimeUnit(TimeUnit.MICROSECONDS)
+  public List<RelNode> getRandomRel(RandomDigestState state) {
+    List<RelNode> ret = new ArrayList<>(state.rels.size());
+    for (RelNode rel : state.rels) {
+      ret.add(state.digestToRelMap.get(rel.getDigest()));
+    }
+    return ret;
   }
 
   public static void main(String[] args) throws RunnerException {
