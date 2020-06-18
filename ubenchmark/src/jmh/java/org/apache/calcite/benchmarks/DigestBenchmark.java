@@ -82,7 +82,7 @@ public class DigestBenchmark {
     @Param({"1", "10", "100"})
     int disjunctions;
 
-    @Param({"STRING"})
+    @Param({"OBJECT, STRING"})
     DigestType digestType;
 
     List<RelNode> rels;
@@ -240,7 +240,7 @@ public class DigestBenchmark {
   @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @OutputTimeUnit(TimeUnit.MICROSECONDS)
-  public List<RelNode> getRandomRel(RandomDigestState state) {
+  public List<RelNode> getRelRandomly(RandomDigestState state) {
     List<RelNode> ret = new ArrayList<>(state.rels.size());
     for (RelNode rel : state.rels) {
       ret.add(state.digestToRelMap.get(rel.getDigest()));
