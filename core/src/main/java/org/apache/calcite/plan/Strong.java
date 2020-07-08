@@ -27,6 +27,7 @@ import org.apache.calcite.util.ImmutableBitSet;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import org.apiguardian.api.API;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -86,8 +87,20 @@ public class Strong {
 
   /** Returns how to deduce whether a particular kind of expression is null,
    * given whether its arguments are null. */
+  @Deprecated // to be removed before 1.24
   public static Policy policy(SqlKind kind) {
     return MAP.getOrDefault(kind, Policy.AS_IS);
+  }
+
+  /** Returns how to deduce whether a particular {@link RexNode} is null.
+   * given whether its arguments are null. */
+  public static Policy policy(RexNode rexNode) {
+    if (rexNode instanceof RexCall
+        && ((RexCall) rexNode).getOperator() instanceof PolicySupplier) {
+      final PolicySupplier supplier = (PolicySupplier) ((RexCall) rexNode).getOperator();
+      return supplier.get();
+    }
+    return MAP.getOrDefault(rexNode.getKind(), Policy.AS_IS);
   }
 
   /**
@@ -293,5 +306,17 @@ public class Strong {
 
     /** This kind of expression may be null. There is no way to rewrite. */
     AS_IS,
+  }
+
+  /**
+   * Interface to allow downstream projects to define their own {@link Policy}.
+   * For example, a UDF can implement and have its custom policy.
+   *
+   * @see Strong
+   */
+  @API(status = API.Status.EXPERIMENTAL, since = "1.24")
+  public interface PolicySupplier {
+    /** Returns the policy of the node. */
+    Policy get();
   }
 }
